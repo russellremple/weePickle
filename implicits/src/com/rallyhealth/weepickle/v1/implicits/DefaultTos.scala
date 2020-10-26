@@ -29,6 +29,7 @@ trait DefaultTos extends com.rallyhealth.weepickle.v1.core.Types with Generated 
   }
   implicit val ToBoolean: To[Boolean] = new SimpleTo[Boolean] {
     override def expectedMsg = "expected boolean"
+    override def visitString(cs: CharSequence) = cs.toString.toBoolean
     override def visitTrue() = true
     override def visitFalse() = false
   }
@@ -48,6 +49,7 @@ trait DefaultTos extends com.rallyhealth.weepickle.v1.core.Types with Generated 
 
   implicit val ToInt: To[Int] = new NumericTo[Int] {
     override def expectedMsg = "expected number"
+    override def visitString(cs: CharSequence) = cs.toString.toInt
     override def visitInt32(d: Int): Int = d
     override def visitInt64(d: Long): Int = d.toInt
     override def visitUInt64(d: Long): Int = d.toInt
@@ -71,6 +73,7 @@ trait DefaultTos extends com.rallyhealth.weepickle.v1.core.Types with Generated 
   }
   implicit val ToShort: To[Short] = new NumericTo[Short] {
     override def expectedMsg = "expected number"
+    override def visitString(cs: CharSequence) = cs.toString.toShort
     override def visitInt32(d: Int): Short = d.toShort
     override def visitInt64(d: Long): Short = d.toShort
     override def visitUInt64(d: Long): Short = d.toShort
@@ -81,6 +84,7 @@ trait DefaultTos extends com.rallyhealth.weepickle.v1.core.Types with Generated 
   }
   implicit val ToByte: To[Byte] = new NumericTo[Byte] {
     override def expectedMsg = "expected number"
+    override def visitString(cs: CharSequence) = cs.toString.toByte
     override def visitInt32(d: Int): Byte = d.toByte
     override def visitInt64(d: Long): Byte = d.toByte
     override def visitUInt64(d: Long): Byte = d.toByte
@@ -181,31 +185,28 @@ trait DefaultTos extends com.rallyhealth.weepickle.v1.core.Types with Generated 
   def MapTo0[M[A, B] <: collection.Map[A, B], K, V](
     make: Iterable[(K, V)] => M[K, V]
   )(implicit k: To[K], v: To[V]): To[M[K, V]] = {
-    if (k ne ToString) ToSeqLike[Array, (K, V)].map(x => make(x))
-    else
-      new SimpleTo[M[K, V]] {
+    new SimpleTo[M[K, V]] {
 
-        override def visitNull(): M[K, V] = make(Nil)
+      override def visitNull(): M[K, V] = make(Nil)
 
-        override def visitObject(length: Int): ObjVisitor[Any, M[K, V]] = new ObjVisitor[Any, M[K, V]] {
-          val strings = mutable.Buffer.empty[K]
-          val values = mutable.Buffer.empty[V]
-          def subVisitor = v
+      override def visitObject(length: Int): ObjVisitor[Any, M[K, V]] = new ObjVisitor[Any, M[K, V]] {
+        private val keys = mutable.Buffer.empty[K]
+        private val values = mutable.Buffer.empty[V]
 
-          def visitKey(): Visitor[_, _] = ToString
+        def subVisitor = v
 
-          def visitKeyValue(s: Any): Unit = {
-            strings.append(s.toString.asInstanceOf[K])
-          }
+        def visitKey(): Visitor[_, _] = k
 
-          def visitValue(v: Any): Unit = values.append(v.asInstanceOf[V])
+        def visitKeyValue(s: Any): Unit = keys.append(s.asInstanceOf[K])
 
-          def visitEnd(): M[K, V] = make(strings.zip(values))
+        def visitValue(v: Any): Unit = values.append(v.asInstanceOf[V])
 
-        }
+        def visitEnd(): M[K, V] = make(keys.zip(values))
 
-        def expectedMsg = "expected map"
       }
+
+      def expectedMsg = "expected map"
+    }
   }
   implicit def ToMap[K, V](implicit k: To[K], v: To[V]): To[collection.Map[K, V]] = {
     MapTo0[collection.Map, K, V](_.toMap)
